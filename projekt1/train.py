@@ -29,7 +29,7 @@ fract = 0.1
 def name_file(prefix, beta, num_epochs, h_dim, z_dim, lr, batch_size, format, extra=""):
   # produces file names based on model parameters
   return prefix + "_b"+str(beta)+"_epochs"+str(num_epochs)+"_hdim"+str(h_dim)+"_zdim"+str(z_dim)+"_lr"+str(lr)+\
-    "_batch"+str(batch_size)+extra+format
+    "_batch"+str(batch_size)+ extra + format
 
 def load_data(filename):
   # data loading
@@ -53,15 +53,15 @@ test_cts = test_gex.obs["cell_type"]
 def train(model, BETA, NUM_EPOCHS, INPUT_DIM, H_DIM, Z_DIM, LR, BATCH_SIZE, extra = ""):
   # producing files for saving: loss with division on -elbo, reconstruction loss and regularization loss,
   # file with latent space for last epoch and file with model parameters
-  lspace = open(name_file("TRAIN_LATENTSPACE", BETA, NUM_EPOCHS, H_DIM, Z_DIM, LR, BATCH_SIZE, extra, ".csv"), "w+")
+  lspace = open(name_file("TRAIN_LATENTSPACE", BETA, NUM_EPOCHS, H_DIM, Z_DIM, LR, BATCH_SIZE, ".csv", extra), "w+")
   latent_writer = csv.writer(lspace, delimiter=",")
-  train_elbo = open(name_file("TRAIN_ELBO", BETA, NUM_EPOCHS, H_DIM, Z_DIM, LR, BATCH_SIZE, extra, ".txt"), "w+")
-  train_reconst_loss = open(name_file("TRAIN_REC_LOSS", BETA, NUM_EPOCHS, H_DIM, Z_DIM, LR, BATCH_SIZE, extra, ".txt"), "w+")
-  train_regul_loss = open(name_file("TRAIN_REG_LOSS", BETA, NUM_EPOCHS, H_DIM, Z_DIM, LR, BATCH_SIZE, extra, ".txt"), "w+")
-  test_elbo = open(name_file("TEST_ELBO", BETA, NUM_EPOCHS, H_DIM, Z_DIM, LR, BATCH_SIZE, extra, ".txt"), "w+")
-  test_reconst_loss = open(name_file("TEST_REC_LOSS", BETA, NUM_EPOCHS, H_DIM, Z_DIM, LR, BATCH_SIZE, extra, ".txt"), "w+")
-  test_regul_loss = open(name_file("TEST_REG_LOSS", BETA, NUM_EPOCHS, H_DIM, Z_DIM, LR, BATCH_SIZE, extra, ".txt"), "w+")
-  model_file = open(name_file("MODEL", BETA, NUM_EPOCHS, H_DIM, Z_DIM, LR, BATCH_SIZE, extra, ".txt"), "w+")
+  train_elbo = open(name_file("TRAIN_ELBO", BETA, NUM_EPOCHS, H_DIM, Z_DIM, LR, BATCH_SIZE, ".txt", extra), "w+")
+  train_reconst_loss = open(name_file("TRAIN_REC_LOSS", BETA, NUM_EPOCHS, H_DIM, Z_DIM, LR, BATCH_SIZE, ".txt", extra), "w+")
+  train_regul_loss = open(name_file("TRAIN_REG_LOSS", BETA, NUM_EPOCHS, H_DIM, Z_DIM, LR, BATCH_SIZE, ".txt", extra), "w+")
+  test_elbo = open(name_file("TEST_ELBO", BETA, NUM_EPOCHS, H_DIM, Z_DIM, LR, BATCH_SIZE, ".txt", extra), "w+")
+  test_reconst_loss = open(name_file("TEST_REC_LOSS", BETA, NUM_EPOCHS, H_DIM, Z_DIM, LR, BATCH_SIZE, ".txt", extra), "w+")
+  test_regul_loss = open(name_file("TEST_REG_LOSS", BETA, NUM_EPOCHS, H_DIM, Z_DIM, LR, BATCH_SIZE, ".txt", extra), "w+")
+  model_file = open(name_file("MODEL", BETA, NUM_EPOCHS, H_DIM, Z_DIM, LR, BATCH_SIZE, ".txt", extra), "w+")
 
   for epoch in range(NUM_EPOCHS):
     loop = tqdm(enumerate(train_loader))
@@ -223,5 +223,5 @@ cust_encoder = EncoderGaussian(cust_net).to(DEVICE)
 bin_decoder = DecoderNegBinomial(cust_net)
 cust_model = VAE(cust_encoder, bin_decoder, 50).to(DEVICE)
 optimazer = optim.Adam(cust_model.parameters(), lr = 0.0005)
-train(cust_model, 1, 1, 5000, 200, 50, 0.0005, 10, "CUSTOM")
+train(cust_model, 1, 1, 5000, 200, 50, 0.0005, 20, "CUSTOM")
 
