@@ -18,151 +18,41 @@ np.set_printoptions(threshold=sys.maxsize)
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 from matplotlib import pyplot as plt
+from models import Network, EncoderGaussian, DecoderGaussian, VAE, RNAseq_Dataset
 
-class Network(torch.nn.Module):
-  def __init__(self, input_dim, h_dim = 200, z_dim=20, o_dim=20):
-    super(Network, self).__init__()
-    self.img2hid = nn.Linear(input_dim, h_dim)
-    self.hid2mu_e = nn.Linear(h_dim, z_dim)
-    self.hid2sigma_e = nn.Linear(h_dim, z_dim)
-
-    self.z2hid = nn.Linear(z_dim, h_dim)
-    self.hid2mu_d = nn.Linear(h_dim, input_dim)
-    self.hid2sigma_d = nn.Linear(h_dim, input_dim)
-
-    self.relu = nn.ReLU()
-
-  def encode(self, x):
-    h = self.relu(self.img2hid(x))
-    mu, sigma = self.hid2mu_e(h), self.hid2sigma_e(h)
-    return mu, sigma
-
-  def decode(self, z):
-    h = self.relu(self.z2hid(z))
-    mu, sigma = self.hid2mu_d(h), self.hid2sigma_d(h)
-    return mu, sigma
-
-class EncoderGaussian(torch.nn.Module):
-  def __init__(self, network):
-    super(EncoderGaussian, self).__init__()
-    self.network = network
-    self.dist = None
-    self.mu = None
-    self.var = None
-    self.log_var = None
-
-  def log_prob(self,x):
-    return self.dist.log_prob(x).sum(-1)
-
-  def _sample(self):
-    return self.dist.rsample()
-  
-  def forward(self,x):
-    mu, log_var = self.network.encode(x)
-    var = torch.exp(log_var)
-    cov = torch.diag_embed(var)
-    self.dist = torch.distributions.MultivariateNormal(mu, cov)
-    self.mu = mu
-    self.log_var = log_var
-    self.var = var
-    return mu, var
-
-class DecoderGaussian(torch.nn.Module):
-  def __init__(self, network):
-    super(DecoderGaussian, self).__init__()
-    self.network = network
-    self.mu = None
-    self.var = None
-    self.dist = None
-
-  def _sample(self):
-    return torch.sigmoid(self.dist.sample()) #??sigmoud??
-
-  def log_prob(self,x):
-    return self.dist.log_prob(x).sum(-1)
-
-  def forward(self,x):
-    mu, log_var = self.network.decode(x)
-    var = torch.exp(log_var)
-    cov = torch.diag_embed(var)
-    self.dist = torch.distributions.MultivariateNormal(mu, cov)
-    self.mu = mu
-    self.var = var
-    return mu, var
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-class VAE(nn.Module):
-  def __init__(self, encoder, decoder):
-    super().__init__()
-    self.encoder = encoder
-    self.decoder = decoder
-    self.prior_dist = torch.distributions.MultivariateNormal(torch.zeros([Z_DIM]).to(DEVICE), torch.eye(Z_DIM).to(DEVICE))
+fract = 0.005
 
-  def loss_fn(self, x):
-    reconstruction_loss = self.decoder.log_prob(x)
-    regularization_loss = BETA*torch.sum(torch.distributions.kl.kl_divergence(self.prior_dist, self.encoder.dist))
-    elbo = reconstruction_loss - regularization_loss
-    return -elbo, reconstruction_loss, regularization_loss
-
-  def encode(self, x):
-    self.encoder.forward(x)
-    z = self.encoder._sample()
-    return z
-
-  def decode(self, z):
-    self.decoder.forward(z)
-    x_hat = self.decoder._sample()
-    return x_hat
-    
-  def forward(self,x):
-    z = self.encode(x)
-    x_hat = self.decode(z)
-    return z, x_hat
-
-class RNAseq_Dataset(Dataset):
-  def __init__(self, matrix, cell_types):
-    self.rows = [matrix[i, :] for i in range(matrix.shape[0])]
-    self.targets = list(zip(self.rows, cell_types))
-
-  def __getitem__(self, index):
-    sc, ct = self.targets[index]
-    return sc, ct
-    #return torch.Tensor(self.matrix[index, :])
-
-  def __len__(self):
-      return len(self.targets)
 
 def name_file(prefix, beta, num_epochs, h_dim, z_dim, lr, batch_size, format):
+  # produces file names based on model parameters
   return prefix + "_b"+str(beta)+"_epochs"+str(num_epochs)+"_hdim"+str(h_dim)+"_zdim"+str(z_dim)+"_lr"+str(lr)+\
     "_batch"+str(batch_size)+format
 
 def load_data(filename):
+  # data loading
     adata = sc.read_h5ad(filename)
     return adata
 
-INPUT_DIM = 5000
-H_DIM = 300
-Z_DIM = 100
-NUM_EPOCHS = 1
-BATCH_SIZE = 10
-LR = 0.005
-BETA = 1
 
-
-fract = 0.005
 test_data = load_data("SAD2022Z_Project1_GEX_test.h5ad")
+# taking only fraction if necessary
 test_gex = sc.pp.subsample(test_data, fraction = fract, copy = True, random_state = 5)
+# log1p application and conversion to dense array
 test_dataset = torch.log1p(torch.Tensor(test_gex.X.toarray())).to(DEVICE)
-
+# analogically for training dataset
 train_data = load_data("SAD2022Z_Project1_GEX_train.h5ad")
 train_gex = sc.pp.subsample(train_data, fraction = fract, copy = True, random_state = 5)
 train_dataset = torch.log1p(torch.Tensor(train_gex.X.toarray())).to(DEVICE)
-
+# saving vector with cell types
 train_cts = train_gex.obs["cell_type"]
 test_cts = test_gex.obs["cell_type"]
 
-def train():
+def train(BETA, NUM_EPOCHS, INPUT_DIM, H_DIM, Z_DIM, LR, BATCH_SIZE):
+  # producing files for saving: loss with division on -elbo, reconstruction loss and regularization loss,
+  # file with latent space for last epoch and file with model parameters
   lspace = open(name_file("TRAIN_LATENTSPACE", BETA, NUM_EPOCHS, H_DIM, Z_DIM, LR, BATCH_SIZE, ".csv"), "w+")
   latent_writer = csv.writer(lspace, delimiter=",")
   train_elbo = open(name_file("TRAIN_ELBO", BETA, NUM_EPOCHS, H_DIM, Z_DIM, LR, BATCH_SIZE, ".txt"), "w+")
@@ -176,22 +66,19 @@ def train():
   for epoch in range(NUM_EPOCHS):
     loop = tqdm(enumerate(train_loader))
     for i, (x, y) in loop:
-      # Forward pass
-      print(x.shape)
       x = x.to(DEVICE).view(x.shape[0], INPUT_DIM)
       z, x_hat = model.forward(x)
-      print("Z shape", z.shape)
       # compute loss
-      def loss_fn(x):
+      def loss_fn(x, beta):
         reconstruction_loss = model.decoder.log_prob(x)
-        regularization_loss = BETA*torch.sum(torch.distributions.kl.kl_divergence(model.prior_dist, model.encoder.dist))
+        regularization_loss = beta*torch.sum(torch.distributions.kl.kl_divergence(model.prior_dist, model.encoder.dist))
         elbo = reconstruction_loss - regularization_loss
         return -elbo, reconstruction_loss, regularization_loss
 
       test_sc, test_sct = test_iter.next()
-      te_elbo, te_rec_loss, te_reg_loss = loss_fn(test_sc)
+      te_elbo, te_rec_loss, te_reg_loss = loss_fn(BETA, test_sc)
       optimazer.zero_grad()
-      tr_elbo, tr_rec_loss, tr_reg_loss = loss_fn(x)
+      tr_elbo, tr_rec_loss, tr_reg_loss = loss_fn(BETA, x)
       tr_elbo.backward()
       optimazer.step()
 
@@ -218,14 +105,14 @@ def train():
 
 train_dataset = RNAseq_Dataset(train_dataset, train_cts)
 test_dataset = RNAseq_Dataset(test_dataset, test_cts)
-train_loader = DataLoader(dataset = train_dataset, batch_size = BATCH_SIZE, shuffle = True)
+train_loader = DataLoader(dataset = train_dataset, batch_size = 10, shuffle = True)
 test_loader = DataLoader(dataset = test_dataset, batch_size = 1, shuffle = True)
 test_iter = iter(test_loader)
-net = Network(INPUT_DIM, H_DIM, Z_DIM).to(DEVICE)
+net = Network(5000, 300, 100).to(DEVICE)
 encoder = EncoderGaussian(net).to(DEVICE)
 decoder = DecoderGaussian(net).to(DEVICE)
 model = VAE(encoder, decoder).to(DEVICE)
-optimazer = optim.Adam(model.parameters(), lr = LR)
+optimazer = optim.Adam(model.parameters(), lr = 0.005)
 
 def convert_params(List):
   res = []
@@ -239,7 +126,7 @@ def convert_params(List):
         res.append(float(num[0]))
   return res
 
-def load_model(filename):
+def load_model(filename, INPUT_DIM, H_DIM, Z_DIM):
   data = open(filename).read().split(">")
   net = Network(INPUT_DIM, H_DIM, Z_DIM).to(DEVICE)
   encoder_ = EncoderGaussian(net).to(DEVICE)
@@ -258,7 +145,7 @@ def load_model(filename):
   
   return VAE(encoder_, decoder_)
 
-def test(M, dataloader):
+def test(M, dataloader, INPUT_DIM):
   Z = []
   labels = []
   M = M.to(DEVICE)
@@ -278,8 +165,6 @@ def test(M, dataloader):
         rec_loss.append(rec)
         reg_loss.append(reg)
         labels.append(y)
-
-        #loop.set_postfix(loss = el.item())
       except RuntimeError:
         print("Runtime Error")
         break
@@ -312,23 +197,23 @@ def pca_encoded_cells(df, plot_title):
   plt.savefig(plot_title)
   plt.close()
 
-Z_DIM = 50
-model_z50 = load_model("E1_ZDIM_50/MODEL_b1_epochs1_hdim300_zdim50_lr0.005_batch10.txt")
-Z_50, labels_50 = test(model_z50, test_loader)
+
+model_z50 = load_model("E1_ZDIM_50/MODEL_b1_epochs1_hdim300_zdim50_lr0.005_batch10.txt", 5000, 300, 50)
+Z_50, labels_50 = test(model_z50, test_loader, 5000)
 df_50 = pd.DataFrame(Z_50)
 df_50['target'] = labels_50
 pca_encoded_cells(df_50, "PCA_test_zdim50.png")
 
-Z_DIM = 100
-model_z100 = load_model("E1_ZDIM_100/MODEL_b1_epochs1_hdim300_zdim100_lr0.005_batch10.txt")
-Z_100, labels_100 = test(model_z100, test_loader)
+
+model_z100 = load_model("E1_ZDIM_100/MODEL_b1_epochs1_hdim300_zdim100_lr0.005_batch10.txt", 5000, 300, 100)
+Z_100, labels_100 = test(model_z100, test_loader, 5000)
 df_100 = pd.DataFrame(Z_100)
 df_100['target'] = labels_100
 pca_encoded_cells(df_100, "PCA_test_zdim100.png")
 
-Z_DIM = 150
-model_z150 = load_model("E1_ZDIM_150/MODEL_b1_epochs1_hdim300_zdim150_lr0.005_batch10.txt")
-Z_150, labels_150 = test(model_z150, test_loader)
+
+model_z150 = load_model("E1_ZDIM_150/MODEL_b1_epochs1_hdim300_zdim150_lr0.005_batch10.txt", 5000, 300, 100)
+Z_150, labels_150 = test(model_z150, test_loader, 5000)
 df_150 = pd.DataFrame(Z_150)
 df_150['target'] = labels_150
 pca_encoded_cells(df_150, "PCA_test_zdim150.png")
