@@ -18,18 +18,18 @@ np.set_printoptions(threshold=sys.maxsize)
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 from matplotlib import pyplot as plt
-from models import Network, EncoderGaussian, DecoderGaussian, VAE, RNAseq_Dataset
+from models import Network, EncoderGaussian, DecoderGaussian, VAE, RNAseq_Dataset, DecoderNegBinomial, NetworkCustom
 
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-fract = 0.005
+fract = 0.1
 
 
-def name_file(prefix, beta, num_epochs, h_dim, z_dim, lr, batch_size, format):
+def name_file(prefix, beta, num_epochs, h_dim, z_dim, lr, batch_size, format, extra=""):
   # produces file names based on model parameters
   return prefix + "_b"+str(beta)+"_epochs"+str(num_epochs)+"_hdim"+str(h_dim)+"_zdim"+str(z_dim)+"_lr"+str(lr)+\
-    "_batch"+str(batch_size)+format
+    "_batch"+str(batch_size)+extra+format
 
 def load_data(filename):
   # data loading
@@ -50,18 +50,18 @@ train_dataset = torch.log1p(torch.Tensor(train_gex.X.toarray())).to(DEVICE)
 train_cts = train_gex.obs["cell_type"]
 test_cts = test_gex.obs["cell_type"]
 
-def train(BETA, NUM_EPOCHS, INPUT_DIM, H_DIM, Z_DIM, LR, BATCH_SIZE):
+def train(model, BETA, NUM_EPOCHS, INPUT_DIM, H_DIM, Z_DIM, LR, BATCH_SIZE, extra = ""):
   # producing files for saving: loss with division on -elbo, reconstruction loss and regularization loss,
   # file with latent space for last epoch and file with model parameters
-  lspace = open(name_file("TRAIN_LATENTSPACE", BETA, NUM_EPOCHS, H_DIM, Z_DIM, LR, BATCH_SIZE, ".csv"), "w+")
+  lspace = open(name_file("TRAIN_LATENTSPACE", BETA, NUM_EPOCHS, H_DIM, Z_DIM, LR, BATCH_SIZE, extra, ".csv"), "w+")
   latent_writer = csv.writer(lspace, delimiter=",")
-  train_elbo = open(name_file("TRAIN_ELBO", BETA, NUM_EPOCHS, H_DIM, Z_DIM, LR, BATCH_SIZE, ".txt"), "w+")
-  train_reconst_loss = open(name_file("TRAIN_REC_LOSS", BETA, NUM_EPOCHS, H_DIM, Z_DIM, LR, BATCH_SIZE, ".txt"), "w+")
-  train_regul_loss = open(name_file("TRAIN_REG_LOSS", BETA, NUM_EPOCHS, H_DIM, Z_DIM, LR, BATCH_SIZE, ".txt"), "w+")
-  test_elbo = open(name_file("TEST_ELBO", BETA, NUM_EPOCHS, H_DIM, Z_DIM, LR, BATCH_SIZE, ".txt"), "w+")
-  test_reconst_loss = open(name_file("TEST_REC_LOSS", BETA, NUM_EPOCHS, H_DIM, Z_DIM, LR, BATCH_SIZE, ".txt"), "w+")
-  test_regul_loss = open(name_file("TEST_REG_LOSS", BETA, NUM_EPOCHS, H_DIM, Z_DIM, LR, BATCH_SIZE, ".txt"), "w+")
-  model_file = open(name_file("MODEL", BETA, NUM_EPOCHS, H_DIM, Z_DIM, LR, BATCH_SIZE, ".txt"), "w+")
+  train_elbo = open(name_file("TRAIN_ELBO", BETA, NUM_EPOCHS, H_DIM, Z_DIM, LR, BATCH_SIZE, extra, ".txt"), "w+")
+  train_reconst_loss = open(name_file("TRAIN_REC_LOSS", BETA, NUM_EPOCHS, H_DIM, Z_DIM, LR, BATCH_SIZE, extra, ".txt"), "w+")
+  train_regul_loss = open(name_file("TRAIN_REG_LOSS", BETA, NUM_EPOCHS, H_DIM, Z_DIM, LR, BATCH_SIZE, extra, ".txt"), "w+")
+  test_elbo = open(name_file("TEST_ELBO", BETA, NUM_EPOCHS, H_DIM, Z_DIM, LR, BATCH_SIZE, extra, ".txt"), "w+")
+  test_reconst_loss = open(name_file("TEST_REC_LOSS", BETA, NUM_EPOCHS, H_DIM, Z_DIM, LR, BATCH_SIZE, extra, ".txt"), "w+")
+  test_regul_loss = open(name_file("TEST_REG_LOSS", BETA, NUM_EPOCHS, H_DIM, Z_DIM, LR, BATCH_SIZE, extra, ".txt"), "w+")
+  model_file = open(name_file("MODEL", BETA, NUM_EPOCHS, H_DIM, Z_DIM, LR, BATCH_SIZE, extra, ".txt"), "w+")
 
   for epoch in range(NUM_EPOCHS):
     loop = tqdm(enumerate(train_loader))
@@ -69,16 +69,16 @@ def train(BETA, NUM_EPOCHS, INPUT_DIM, H_DIM, Z_DIM, LR, BATCH_SIZE):
       x = x.to(DEVICE).view(x.shape[0], INPUT_DIM)
       z, x_hat = model.forward(x)
       # compute loss
-      def loss_fn(x, beta):
-        reconstruction_loss = model.decoder.log_prob(x)
-        regularization_loss = beta*torch.sum(torch.distributions.kl.kl_divergence(model.prior_dist, model.encoder.dist))
-        elbo = reconstruction_loss - regularization_loss
-        return -elbo, reconstruction_loss, regularization_loss
-
+      # def loss_fn(x, beta):
+      #   reconstruction_loss = model.decoder.log_prob(x)
+      #   regularization_loss = beta*torch.sum(torch.distributions.kl.kl_divergence(model.prior_dist, model.encoder.dist))
+      #   elbo = reconstruction_loss - regularization_loss
+      #   return -elbo, reconstruction_loss, regularization_loss
+      
       test_sc, test_sct = test_iter.next()
-      te_elbo, te_rec_loss, te_reg_loss = loss_fn(BETA, test_sc)
+      te_elbo, te_rec_loss, te_reg_loss = model.loss_fn(test_sc, BETA)
       optimazer.zero_grad()
-      tr_elbo, tr_rec_loss, tr_reg_loss = loss_fn(BETA, x)
+      tr_elbo, tr_rec_loss, tr_reg_loss = model.loss_fn(x, BETA)
       tr_elbo.backward()
       optimazer.step()
 
@@ -98,8 +98,8 @@ def train(BETA, NUM_EPOCHS, INPUT_DIM, H_DIM, Z_DIM, LR, BATCH_SIZE):
         
   model_file.write(">Encoder distribution\n" +">"+ str(model.encoder.mu.cpu().detach().numpy()) + "\n>"\
     + str(model.encoder.var.cpu().detach().numpy()) + "\n" +\
-    ">Decoder distribution\n>" + str(model.decoder.mu.cpu().detach().numpy()) +\
-      "\n>" + str(model.decoder.var.cpu().detach().numpy()))
+    ">Decoder distribution\n>" + str(model.decoder.tc.cpu().detach().numpy()) +\
+      "\n>" + str(model.decoder.probs.cpu().detach().numpy()))
 
 
 
@@ -108,11 +108,11 @@ test_dataset = RNAseq_Dataset(test_dataset, test_cts)
 train_loader = DataLoader(dataset = train_dataset, batch_size = 10, shuffle = True)
 test_loader = DataLoader(dataset = test_dataset, batch_size = 1, shuffle = True)
 test_iter = iter(test_loader)
-net = Network(5000, 300, 100).to(DEVICE)
-encoder = EncoderGaussian(net).to(DEVICE)
-decoder = DecoderGaussian(net).to(DEVICE)
-model = VAE(encoder, decoder).to(DEVICE)
-optimazer = optim.Adam(model.parameters(), lr = 0.005)
+# net = Network(5000, 300, 100).to(DEVICE)
+# encoder = EncoderGaussian(net).to(DEVICE)
+# decoder = DecoderGaussian(net).to(DEVICE)
+# model = VAE(encoder, decoder).to(DEVICE)
+# optimazer = optim.Adam(model.parameters(), lr = 0.005)
 
 def convert_params(List):
   res = []
@@ -198,22 +198,30 @@ def pca_encoded_cells(df, plot_title):
   plt.close()
 
 
-model_z50 = load_model("E1_ZDIM_50/MODEL_b1_epochs1_hdim300_zdim50_lr0.005_batch10.txt", 5000, 300, 50)
-Z_50, labels_50 = test(model_z50, test_loader, 5000)
-df_50 = pd.DataFrame(Z_50)
-df_50['target'] = labels_50
-pca_encoded_cells(df_50, "PCA_test_zdim50.png")
+# model_z50 = load_model("E1_ZDIM_50/MODEL_b1_epochs1_hdim300_zdim50_lr0.005_batch10.txt", 5000, 300, 50)
+# Z_50, labels_50 = test(model_z50, test_loader, 5000)
+# df_50 = pd.DataFrame(Z_50)
+# df_50['target'] = labels_50
+# pca_encoded_cells(df_50, "PCA_test_zdim50.png")
 
 
-model_z100 = load_model("E1_ZDIM_100/MODEL_b1_epochs1_hdim300_zdim100_lr0.005_batch10.txt", 5000, 300, 100)
-Z_100, labels_100 = test(model_z100, test_loader, 5000)
-df_100 = pd.DataFrame(Z_100)
-df_100['target'] = labels_100
-pca_encoded_cells(df_100, "PCA_test_zdim100.png")
+# model_z100 = load_model("E1_ZDIM_100/MODEL_b1_epochs1_hdim300_zdim100_lr0.005_batch10.txt", 5000, 300, 100)
+# Z_100, labels_100 = test(model_z100, test_loader, 5000)
+# df_100 = pd.DataFrame(Z_100)
+# df_100['target'] = labels_100
+# pca_encoded_cells(df_100, "PCA_test_zdim100.png")
 
 
-model_z150 = load_model("E1_ZDIM_150/MODEL_b1_epochs1_hdim300_zdim150_lr0.005_batch10.txt", 5000, 300, 100)
-Z_150, labels_150 = test(model_z150, test_loader, 5000)
-df_150 = pd.DataFrame(Z_150)
-df_150['target'] = labels_150
-pca_encoded_cells(df_150, "PCA_test_zdim150.png")
+# model_z150 = load_model("E1_ZDIM_150/MODEL_b1_epochs1_hdim300_zdim150_lr0.005_batch10.txt", 5000, 300, 100)
+# Z_150, labels_150 = test(model_z150, test_loader, 5000)
+# df_150 = pd.DataFrame(Z_150)
+# df_150['target'] = labels_150
+# pca_encoded_cells(df_150, "PCA_test_zdim150.png")
+
+cust_net = NetworkCustom(5000, 200, 50).to(DEVICE)
+cust_encoder = EncoderGaussian(cust_net).to(DEVICE)
+bin_decoder = DecoderNegBinomial(cust_net)
+cust_model = VAE(cust_encoder, bin_decoder, 50).to(DEVICE)
+optimazer = optim.Adam(cust_model.parameters(), lr = 0.0005)
+train(cust_model, 1, 1, 5000, 200, 50, 0.0005, 10, "CUSTOM")
+

@@ -81,11 +81,11 @@ class DecoderGaussian(torch.nn.Module):
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class VAE(nn.Module):
-  def __init__(self, encoder, decoder):
+  def __init__(self, encoder, decoder, z_dim):
     super().__init__()
     self.encoder = encoder
     self.decoder = decoder
-    self.prior_dist = torch.distributions.MultivariateNormal(torch.zeros([self.encoder.mu.shape[1]]).to(DEVICE), torch.eye(self.encoder.mu.shape[1]).to(DEVICE))
+    self.prior_dist = torch.distributions.MultivariateNormal(torch.zeros([z_dim]).to(DEVICE), torch.eye(z_dim).to(DEVICE))
 
   def loss_fn(self, x, beta):
     reconstruction_loss = self.decoder.log_prob(x)
@@ -131,7 +131,7 @@ class NetworkCustom(torch.nn.Module):
     self.z2hid = nn.Linear(z_dim, h_dim)
     self.hid2tot_count = nn.Linear(h_dim, input_dim)
     self.hid2probs = nn.Linear(h_dim, input_dim)
-    self.hid2logits = nn.Linear(h_dim, input_dim)
+    #self.hid2logits = nn.Linear(h_dim, input_dim)
 
     self.relu = nn.ReLU()
 
@@ -142,8 +142,9 @@ class NetworkCustom(torch.nn.Module):
 
   def decode(self, z):
     h = self.relu(self.z2hid(z))
-    tc, probs, logits = self.hid2tot_count(h), self.hid2probs(h), self.hid2logits(h)
-    return tc, probs, logits
+    tc =  torch.exp(self.hid2tot_count(h))
+    probs = torch.sigmoid(self.hid2probs(h))
+    return tc, probs
 
 class DecoderNegBinomial(torch.nn.Module):
   def __init__(self, network):
@@ -155,12 +156,12 @@ class DecoderNegBinomial(torch.nn.Module):
     self.dist.sample()
 
   def log_prob(self,x):
-    return self.dist.log_prob(x).sum(-1)
+    x = x.to(torch.int)
+    return self.dist.log_prob(x).sum()
 
   def forward(self,x):
-    tc, probs, logits = self.network.decode(x)
-    self.dist = torch.distributions.NegativeBinomial(tc, probs, logits)
+    tc, probs = self.network.decode(x)
+    self.dist = torch.distributions.NegativeBinomial(tc, probs)
     self.tc = tc
     self.probs = probs
-    self.logits = logits
-    return tc, probs, logits
+    return tc, probs
