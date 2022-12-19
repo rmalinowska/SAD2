@@ -156,20 +156,38 @@ def latent_space_PCA(filename):
   pca.fit(x)
   print(pca.n_components_)
 
-plot_loss("TRAIN_ELBO_b1_epochs1_hdim200_zdim50_lr0.0005_batch20CUSTOM.txt", \
-          "-ELBO, training, latent dim 50, neg. binomial decoder","TRAIN_ELBO_b1_epochs1_hdim200_zdim50_lr0.0005_batch20_negbin.png")
+# plot_loss("TRAIN_ELBO_b1_epochs1_hdim200_zdim50_lr0.0005_batch20CUSTOM.txt", \
+#           "-ELBO, training, latent dim 50, neg. binomial decoder","TRAIN_ELBO_b1_epochs1_hdim200_zdim50_lr0.0005_batch20_negbin.png")
 
-plot_loss("TRAIN_REC_LOSS_b1_epochs1_hdim200_zdim50_lr0.0005_batch20CUSTOM.txt",\
-          "Reconstruction loss, training, latent dim 50, neg. binomial decoder", "TRAIN_REC_LOSS_b1_epochs1_hdim200_zdim50_lr0.0005_batch20_negbin.png")
+# plot_loss("TRAIN_REC_LOSS_b1_epochs1_hdim200_zdim50_lr0.0005_batch20CUSTOM.txt",\
+#           "Reconstruction loss, training, latent dim 50, neg. binomial decoder", "TRAIN_REC_LOSS_b1_epochs1_hdim200_zdim50_lr0.0005_batch20_negbin.png")
 
-plot_loss("TRAIN_REG_LOSS_b1_epochs1_hdim200_zdim50_lr0.0005_batch20CUSTOM.txt",\
-          "Regularization loss, training, latent dim 50, neg. binomial decoder", "TRAIN_REG_LOSS_b1_epochs1_hdim200_zdim50_lr0.0005_batch20_negbin.png")
+# plot_loss("TRAIN_REG_LOSS_b1_epochs1_hdim200_zdim50_lr0.0005_batch20CUSTOM.txt",\
+#           "Regularization loss, training, latent dim 50, neg. binomial decoder", "TRAIN_REG_LOSS_b1_epochs1_hdim200_zdim50_lr0.0005_batch20_negbin.png")
 
-plot_loss("TEST_ELBO_b1_epochs1_hdim200_zdim50_lr0.0005_batch20CUSTOM.txt", \
-          "-ELBO, training, test set, latent dim 50, neg. binomial decoder","TEST_ELBO_b1_epochs1_hdim200_zdim50_lr0.0005_batch20_negbin.png")
+# plot_loss("TEST_ELBO_b1_epochs1_hdim200_zdim50_lr0.0005_batch20CUSTOM.txt", \
+#           "-ELBO, training, test set, latent dim 50, neg. binomial decoder","TEST_ELBO_b1_epochs1_hdim200_zdim50_lr0.0005_batch20_negbin.png")
 
-plot_loss("TEST_REC_LOSS_b1_epochs1_hdim200_zdim50_lr0.0005_batch20CUSTOM.txt",\
-          "Reconstruction loss, training, test set, latent dim 50, neg. binomial decoder", "TEST_REC_LOSS_b1_epochs1_hdim200_zdim59_lr0.0005_batch20_negbin.png")
+# plot_loss("TEST_REC_LOSS_b1_epochs1_hdim200_zdim50_lr0.0005_batch20CUSTOM.txt",\
+#           "Reconstruction loss, training, test set, latent dim 50, neg. binomial decoder", "TEST_REC_LOSS_b1_epochs1_hdim200_zdim59_lr0.0005_batch20_negbin.png")
 
-plot_loss("TEST_REG_LOSS_b1_epochs1_hdim200_zdim50_lr0.0005_batch20CUSTOM.txt",\
-          "Regularization loss, training, test set, latent dim 50, neg. binomial decoder", "TEST_REG_LOSS_b1_epochs1_hdim200_zdim50_lr0.0005_batch20_negbin.png")
+# plot_loss("TEST_REG_LOSS_b1_epochs1_hdim200_zdim50_lr0.0005_batch20CUSTOM.txt",\
+#           "Regularization loss, training, test set, latent dim 50, neg. binomial decoder", "TEST_REG_LOSS_b1_epochs1_hdim200_zdim50_lr0.0005_batch20_negbin.png")
+
+plot_loss("TRAIN_ELBO_b1_epochs7_hdim200_zdim50_lr0.005_batch20CUSTOM.txt", \
+          "-ELBO, training, latent dim 50, neg. binomial decoder","TRAIN_ELBO_b1_epochs7_hdim200_zdim50_lr0.005_batch20_negbin.png")
+
+plot_loss("TRAIN_REC_LOSS_b1_epochs7_hdim200_zdim50_lr0.005_batch20CUSTOM.txt",\
+          "Reconstruction loss, training, latent dim 50, neg. binomial decoder", "TRAIN_REC_LOSS_b1_epochs7_hdim200_zdim50_lr0.005_batch20_negbin.png")
+
+plot_loss("TRAIN_REG_LOSS_b1_epochs7_hdim200_zdim50_lr0.005_batch20CUSTOM.txt",\
+          "Regularization loss, training, latent dim 50, neg. binomial decoder", "TRAIN_REG_LOSS_b1_epochs7_hdim200_zdim50_lr0.005_batch20_negbin.png")
+
+plot_loss("TEST_ELBO_b1_epochs7_hdim200_zdim50_lr0.005_batch20CUSTOM.txt", \
+          "-ELBO, training, test set, latent dim 50, neg. binomial decoder","TEST_ELBO_b1_epochs7_hdim200_zdim50_lr0.005_batch20_negbin.png")
+
+plot_loss("TEST_REC_LOSS_b1_epochs7_hdim200_zdim50_lr0.005_batch20CUSTOM.txt",\
+          "Reconstruction loss, training, test set, latent dim 50, neg. binomial decoder", "TEST_REC_LOSS_b1_epochs7_hdim200_zdim50_lr0.005_batch20_negbin.png")
+
+plot_loss("TEST_REG_LOSS_b1_epochs7_hdim200_zdim50_lr0.005_batch20CUSTOM.txt",\
+          "Regularization loss, training, test set, latent dim 50, neg. binomial decoder", "TEST_REG_LOSS_b1_epochs7_hdim200_zdim50_lr0.005_batch20_negbin.png")

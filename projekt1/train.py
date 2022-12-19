@@ -5,7 +5,7 @@ from tqdm import tqdm
 from torch import nn, optim
 from torchvision import transforms
 from torchvision.utils import save_image
-from torch.utils.data import DataLoader, Dataset, Subset
+from torch.utils.data import DataLoader, Dataset, Subset, RandomSampler
 import torch.nn.functional as F
 import scanpy as sc
 import csv
@@ -23,7 +23,7 @@ from models import Network, EncoderGaussian, DecoderGaussian, VAE, RNAseq_Datase
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-fract = 0.1
+fract = 1
 
 
 def name_file(prefix, beta, num_epochs, h_dim, z_dim, lr, batch_size, format, extra=""):
@@ -51,6 +51,8 @@ train_cts = train_gex.obs["cell_type"]
 test_cts = test_gex.obs["cell_type"]
 
 def train(model, BETA, NUM_EPOCHS, INPUT_DIM, H_DIM, Z_DIM, LR, BATCH_SIZE, extra = ""):
+  train_loader = DataLoader(dataset = train_dataset, batch_size = BATCH_SIZE, shuffle = True)
+  test_loader = DataLoader(dataset = test_dataset, batch_size = 1, shuffle = True)
   # producing files for saving: loss with division on -elbo, reconstruction loss and regularization loss,
   # file with latent space for last epoch and file with model parameters
   lspace = open(name_file("TRAIN_LATENTSPACE", BETA, NUM_EPOCHS, H_DIM, Z_DIM, LR, BATCH_SIZE, ".csv", extra), "w+")
@@ -75,7 +77,7 @@ def train(model, BETA, NUM_EPOCHS, INPUT_DIM, H_DIM, Z_DIM, LR, BATCH_SIZE, extr
       #   elbo = reconstruction_loss - regularization_loss
       #   return -elbo, reconstruction_loss, regularization_loss
       
-      test_sc, test_sct = test_iter.next()
+      test_sc, test_sct = next(iter(test_loader))
       te_elbo, te_rec_loss, te_reg_loss = model.loss_fn(test_sc, BETA)
       optimazer.zero_grad()
       tr_elbo, tr_rec_loss, tr_reg_loss = model.loss_fn(x, BETA)
@@ -105,9 +107,8 @@ def train(model, BETA, NUM_EPOCHS, INPUT_DIM, H_DIM, Z_DIM, LR, BATCH_SIZE, extr
 
 train_dataset = RNAseq_Dataset(train_dataset, train_cts)
 test_dataset = RNAseq_Dataset(test_dataset, test_cts)
-train_loader = DataLoader(dataset = train_dataset, batch_size = 10, shuffle = True)
-test_loader = DataLoader(dataset = test_dataset, batch_size = 1, shuffle = True)
-test_iter = iter(test_loader)
+#test_iter = iter(test_loader)
+#random_sampler = RandomSampler(data_source = test_loader, num_samples = 1)
 # net = Network(5000, 300, 100).to(DEVICE)
 # encoder = EncoderGaussian(net).to(DEVICE)
 # decoder = DecoderGaussian(net).to(DEVICE)
@@ -223,5 +224,5 @@ cust_encoder = EncoderGaussian(cust_net).to(DEVICE)
 bin_decoder = DecoderNegBinomial(cust_net)
 cust_model = VAE(cust_encoder, bin_decoder, 50).to(DEVICE)
 optimazer = optim.Adam(cust_model.parameters(), lr = 0.0005)
-train(cust_model, 1, 1, 5000, 200, 50, 0.0005, 20, "CUSTOM")
+train(cust_model, 1, 7, 5000, 200, 50, 0.005, 20, "CUSTOM") 
 
